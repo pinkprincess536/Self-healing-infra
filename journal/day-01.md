@@ -20,12 +20,24 @@ Date:
 - Git branching
 
 ## Interview questions
-- What happens between `docker build` and `docker run`?
-- Why is an image different from a container?
-- What does WORKDIR do?
-- Why do Dockerfile instructions create layers?
-- What does `8083:8080` mean?
-- Why use Compose?
+
+**What happens between `docker build` and `docker run`?**
+`docker build` reads the Dockerfile and produces an **image** — a read-only set of layered filesystem snapshots plus metadata (entrypoint, exposed ports, etc). Nothing is running yet at this point, it's just a packaged artifact. `docker run` (or `docker compose up`) takes that image and starts a **container**: a live process with its own writable layer on top of the image, its own network namespace, and its own lifecycle. Building happens once (or whenever the Dockerfile/context changes); running can happen many times from the same image.
+
+**Why is an image different from a container?**
+An image is like a class; a container is like an instance of it. The image is static and immutable — the same image tag always produces the same starting filesystem. A container is a running instance with mutable state (a thin writable layer, a process, logs, an IP). You can start multiple containers from one image, and deleting a container doesn't affect the image it came from.
+
+**What does WORKDIR do?**
+`WORKDIR` sets the working directory inside the image for every subsequent instruction (`COPY`, `RUN`, `CMD`, etc.) and for any process started in the container, similar to running `cd` but persisted across instructions. It also creates the directory if it doesn't exist. In our Dockerfile we set it to `/usr/share/nginx/html` mostly to make the intent explicit — NGINX's base image doesn't strictly need it since we use absolute paths in `COPY`.
+
+**Why do Dockerfile instructions create layers?**
+Each instruction that changes the filesystem (`RUN`, `COPY`, `ADD`) produces a new, cached, immutable layer stacked on top of the previous one. This is how Docker achieves build caching (unchanged layers are reused) and image sharing (multiple images can share common base layers, saving disk and transfer time). It's also why instruction order matters: put things that change rarely (like installing dependencies) before things that change often (like copying application code) to maximize cache hits.
+
+**What does `8083:8080` mean?**
+It's a port mapping in `host:container` format — traffic hitting port 8083 on the **host machine** gets forwarded to port 8080 **inside the container**. In our actual Compose file this ended up as `8083:80` (host 8083 → container's NGINX listening on 80), because port 8080 on the host was already taken by another process and NGINX inside the container listens on 80, not 8080.
+
+**Why use Compose?**
+Compose lets us declare the whole stack (services, ports, build context, networks, restart policy) as one YAML file instead of typing long `docker build`/`docker run` commands by hand. It also gives us a repeatable, versioned definition of "what should be running" — `docker compose up -d` brings the whole environment up consistently, which matters a lot once we add Prometheus, Alertmanager, and other services in later days that all need to talk to each other.
 
 ## Extra related topics — only if core work is stable
 - Docker networking
@@ -53,7 +65,7 @@ Date:
 | 14 | `docker exec nginx cat /etc/nginx/conf.d/default.conf` | Reads a file from inside the running container to verify the config we `COPY`'d in the Dockerfile is the one actually active at runtime. |
 
 ## What I achieved today
-_features, commands, experiments, screenshots, breakthroughs_
+
 
 
 
@@ -61,4 +73,7 @@ _features, commands, experiments, screenshots, breakthroughs_
 docker stop -t 30 nginx
 Docker gives the container 30 seconds to shut down gracefully.
 If it still hasn't stopped, Docker forcibly terminates it.
+
+
+A bind mount connects a folder/file on your computer to a folder inside a container.
 
