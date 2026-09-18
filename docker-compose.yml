@@ -1,0 +1,9 @@
+services:
+  nginx:
+    build:
+      context: ./app
+    container_name: nginx
+    ports:
+      # host:container — 8083 on the host maps to NGINX's port 80 in the container.
+      - "8083:80"
+    restart: unless-stopped
