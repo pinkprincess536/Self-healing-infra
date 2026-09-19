@@ -1,0 +1,76 @@
+---
+# Recovery playbook: restart NGINX, then PROVE it actually recovered.
+#
+# The whole point of this file is the distinction the guide hammers on:
+# "Restart is an action. Recovery is a verified outcome."
+# A successful `docker restart` tells us almost nothing, so we validate in
+# three escalating levels before declaring success.
+- name: Recover NGINX and verify health
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    nginx_container: nginx
+    # Reached over the Compose network by service name, same DNS mechanism
+    # proven with the tester container on Day 2.
+    nginx_host: nginx
+    nginx_port: 80
+    health_url: "http://nginx/health"
+
+  tasks:
+    - name: Restart the NGINX container
+      # `docker restart` works whether the container is currently running or
+      # stopped, which makes it safe for both "crashed" and "hung" cases.
+      ansible.builtin.command:
+        cmd: "docker restart {{ nginx_container }}"
+      register: restart_result
+      changed_when: restart_result.rc == 0
+
+    - name: Show restart result
+      ansible.builtin.debug:
+        msg: "docker restart rc={{ restart_result.rc }} stdout={{ restart_result.stdout | trim }}"
+
+    - name: Wait briefly for the process to come up
+      # NGINX needs a moment to bind its listener. Without this pause the port
+      # check below can race and fail on a perfectly healthy recovery.
+      ansible.builtin.pause:
+        seconds: 3
+
+    # ---- VALIDATION LEVEL 1: is the container process running at all? ----
+    - name: "Level 1 — container is running"
+      ansible.builtin.command:
+        cmd: "docker inspect -f {{ '{{.State.Running}}' }} {{ nginx_container }}"
+      register: running_state
+      changed_when: false
+      failed_when: running_state.stdout | trim != "true"
+
+    # ---- VALIDATION LEVEL 2: is something listening on the port? ----
+    # Proves a listener exists, but NOT that it serves useful responses.
+    - name: "Level 2 — port {{ nginx_port }} is accepting connections"
+      ansible.builtin.wait_for:
+        host: "{{ nginx_host }}"
+        port: "{{ nginx_port }}"
+        timeout: 15
+
+    # ---- VALIDATION LEVEL 3: does the app actually answer correctly? ----
+    # This is the only level that proves the service is USEFUL.
+    - name: "Level 3 — /health returns 200"
+      ansible.builtin.uri:
+        url: "{{ health_url }}"
+        status_code: 200
+        return_content: true
+      register: health
+      # retries/delay absorb slow startup instead of failing a recovery that
+      # would have succeeded a second later.
+      retries: 5
+      delay: 2
+      until: health.status is defined and health.status == 200
+
+    - name: Assert recovery is verified
+      ansible.builtin.assert:
+        that:
+          - health.status == 200
+          - "'ok' in health.content"
+        success_msg: "RECOVERY VERIFIED — NGINX running, port {{ nginx_port }} open, /health returned 200 'ok'."
+        fail_msg: "RECOVERY FAILED VALIDATION — restart ran but the service is not healthy."

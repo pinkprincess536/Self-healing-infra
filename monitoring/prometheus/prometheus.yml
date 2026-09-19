@@ -5,9 +5,13 @@ global:
 rule_files:
   - "alert_rules.yml"
 
-# No `alerting:` block yet — Alertmanager isn't wired up until Day 4.
-# Prometheus will still evaluate alert_rules.yml and show firing alerts
-# under /alerts, it just has nowhere to route them to yet.
+# Day 4: firing alerts are now pushed to Alertmanager, which owns routing.
+# Note the key is `alertmanagers` (plural) — using `alertmanager` here on Day 3
+# made Prometheus refuse to start with "field alertmanager not found".
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
 
 scrape_configs:
   # Prometheus scraping itself — useful baseline target to confirm the

@@ -47,3 +47,43 @@ services:
       - "9090:9090"
     depends_on:
       - nginx-exporter
+
+  alertmanager:
+    # Owns routing/grouping/deduplication of firing alerts. Prometheus decides
+    # WHAT is wrong; Alertmanager decides WHO (or what) gets told about it.
+    image: prom/alertmanager:v0.27.0
+    container_name: alertmanager
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      # Shared secret, read via `credentials_file` — same file the webhook reads.
+      - ./secrets/webhook_token:/etc/alertmanager/webhook_token:ro
+    ports:
+      - "9093:9093"
+    depends_on:
+      - recovery-webhook
+
+  recovery-webhook:
+    # Receives the firing alert from Alertmanager and runs the Ansible recovery
+    # playbook. Requires a Bearer token; refuses to start without one.
+    build:
+      context: ./recovery/webhook
+    container_name: recovery-webhook
+    environment:
+      WEBHOOK_TOKEN_FILE: /run/secrets/webhook_token
+      RECOVERY_COOLDOWN_SECONDS: "60"
+      RECOVERY_MAX_ATTEMPTS: "3"
+      RECOVERY_ATTEMPT_WINDOW_SECONDS: "600"
+    volumes:
+      - ./recovery/ansible:/ansible:ro
+      - ./secrets/webhook_token:/run/secrets/webhook_token:ro
+      # SECURITY: mounting the Docker socket gives this container control over
+      # the Docker daemon, which is effectively root on the host. It's here
+      # because recovery must restart a sibling container. In the Day 5 EC2
+      # setup this is replaced by Ansible reaching the host over SSH/SSM.
+      - /var/run/docker.sock:/var/run/docker.sock
+    # Port deliberately NOT published to the host — only reachable from
+    # Alertmanager on the internal Compose network.
+    expose:
+      - "5000"
+    depends_on:
+      - nginx
