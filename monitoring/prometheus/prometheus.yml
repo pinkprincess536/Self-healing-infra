@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alert_rules.yml"
+
+# No `alerting:` block yet — Alertmanager isn't wired up until Day 4.
+# Prometheus will still evaluate alert_rules.yml and show firing alerts
+# under /alerts, it just has nowhere to route them to yet.
+
+scrape_configs:
+  # Prometheus scraping itself — useful baseline target to confirm the
+  # server is alive independent of anything else in the stack.
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # nginx-prometheus-exporter re-exposes NGINX's stub_status page in
+  # Prometheus format. Service name "nginx-exporter" resolves via Compose's
+  # internal DNS — same mechanism proven with the "tester" container on Day 2.
+  - job_name: "nginx"
+    static_configs:
+      - targets: ["nginx-exporter:9113"]

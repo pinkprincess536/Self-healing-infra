@@ -1,0 +1,34 @@
+groups:
+  - name: nginx-alerts
+    rules:
+      # IMPORTANT DISTINCTION (learned during the Day 3 detection experiment):
+      # up{job="nginx"} reflects whether Prometheus could reach the
+      # nginx-exporter container itself — NOT whether the exporter's own
+      # scrape of NGINX succeeded. The exporter process can be perfectly
+      # healthy while NGINX behind it is dead, in which case up stays at 1
+      # and this rule would never fire. nginx_up is the exporter's own gauge
+      # for "did my last scrape of NGINX succeed" — that's the actual
+      # service-failure signal we want for the core demo.
+      #
+      # for: 2m means the condition must stay true for 2 full evaluation
+      # cycles before the alert actually fires. This avoids raising an alert
+      # on a single missed scrape (network blip, brief restart, etc).
+      - alert: NginxDown
+        expr: nginx_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "NGINX is unreachable"
+          description: "nginx-prometheus-exporter has not been able to reach NGINX for 2+ minutes."
+
+      # Secondary rule: catches the case the first rule can't — the exporter
+      # itself (and therefore all NGINX visibility) going down entirely.
+      - alert: NginxExporterDown
+        expr: up{job="nginx"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "nginx-exporter target is unreachable"
+          description: "Prometheus has not been able to scrape the nginx-exporter target for 2+ minutes. NGINX health is unknown."

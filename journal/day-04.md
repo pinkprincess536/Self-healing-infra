@@ -58,4 +58,21 @@ _features, commands, experiments, screenshots, breakthroughs_
 
 ## What I learned / what broke / what I want to remember
 
+Alertmanager's job: NOTIFY + MANAGE
 
+Alertmanager receives:
+
+🚨 NginxDown
+severity = critical
+
+Then it can decide what to do with it:
+
+Send a Slack notification
+Send an email
+Send a PagerDuty alert
+Group several alerts together
+Avoid sending the exact same alert repeatedly
+Temporarily silence an alert during maintenance
+Route different alerts to different teams
+
+A webhook receiver is simply a URL that waits to receive messages from another system.

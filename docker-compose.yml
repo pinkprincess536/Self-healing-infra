@@ -22,3 +22,28 @@ services:
     entrypoint: ["sleep", "infinity"]
     depends_on:
       - nginx
+
+  nginx-exporter:
+    # Scrapes NGINX's /stub_status endpoint and re-exposes it in Prometheus
+    # text format on :9113. NGINX itself doesn't speak Prometheus's format,
+    # so this exporter is the translation layer Prometheus actually scrapes.
+    image: nginx/nginx-prometheus-exporter:1.3.0
+    container_name: nginx-exporter
+    command:
+      - "--nginx.scrape-uri=http://nginx/stub_status"
+    ports:
+      - "9113:9113"
+    depends_on:
+      - nginx
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: prometheus
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+    ports:
+      # Prometheus UI/API — /targets, /graph, /alerts all live here.
+      - "9090:9090"
+    depends_on:
+      - nginx-exporter
