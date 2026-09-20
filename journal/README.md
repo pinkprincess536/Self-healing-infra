@@ -9,7 +9,6 @@ One file per day, following the pattern from the project guide:
 - What I achieved today
 - What I learned / what broke / what I want to remember
 
-Fill these in as you go — don't skip the "what broke" section, that's where the real learning shows up.
 
 | Day | Focus | File |
 |---|---|---|
