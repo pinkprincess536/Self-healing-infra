@@ -48,6 +48,8 @@ services:
   alertmanager:
     image: prom/alertmanager:v0.27.0
     container_name: alertmanager
+    # Match the group that can read secrets/webhook_token on Linux hosts.
+    user: "65534:65534"
     volumes:
       - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - ./secrets/webhook_token:/etc/alertmanager/webhook_token:ro

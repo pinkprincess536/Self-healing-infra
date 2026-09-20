@@ -89,7 +89,7 @@ curl -fsSLo /tmp/bootstrap-ec2.sh \
 sudo bash /tmp/bootstrap-ec2.sh
 ```
 
-The Ansible playbook prompts twice for a random webhook token using hidden input. It stores the token as `/opt/self-healing/secrets/webhook_token` with root ownership and mode `0600`; Terraform never sees it.
+The Ansible playbook prompts twice for a random webhook token using hidden input. It stores the token as `/opt/self-healing/secrets/webhook_token` with root ownership, Alertmanager's pinned group `65534`, and mode `0640`; Terraform never sees it. This gives Alertmanager read-only access while denying all unrelated users.
 
 Ansible then installs Docker/Compose, enables Docker, installs a systemd unit for the stack, starts it, and verifies NGINX, Prometheus, Alertmanager and the internal webhook.
 

@@ -75,8 +75,10 @@
         content: "{{ webhook_token }}\n"
         dest: "{{ deploy_root }}/secrets/webhook_token"
         owner: root
-        group: root
-        mode: "0600"
+        # Alertmanager is pinned to UID/GID 65534 in Compose. Group-read lets
+        # that non-root process read the shared token without making it public.
+        group: "65534"
+        mode: "0640"
       no_log: true
       notify: Restart self-healing stack
 
