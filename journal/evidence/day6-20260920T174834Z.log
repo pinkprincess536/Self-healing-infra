@@ -1,0 +1,49 @@
+=== DAY 6 SELF-HEALING DEMO ===
+started_at=2026-09-20T17:48:34.1481612Z
+host=LAPTOP-3OLMHMFM
+original_restart_policy=no
+
+=== PHASE 1: HEALTHY BASELINE ===
+NAME               IMAGE                                   COMMAND                  SERVICE            CREATED        STATUS              PORTS
+alertmanager       prom/alertmanager:v0.27.0               "/bin/alertmanager -GǪ"   alertmanager       23 hours ago   Up 8 hours          127.0.0.1:9093->9093/tcp
+nginx              self-healing-nginx                      "/docker-entrypoint.GǪ"   nginx              23 hours ago   Up About a minute   0.0.0.0:8083->80/tcp, [::]:8083->80/tcp
+nginx-exporter     nginx/nginx-prometheus-exporter:1.3.0   "/usr/bin/nginx-promGǪ"   nginx-exporter     23 hours ago   Up 8 hours          127.0.0.1:9113->9113/tcp
+prometheus         prom/prometheus:v2.55.1                 "/bin/prometheus --cGǪ"   prometheus         23 hours ago   Up 8 hours          127.0.0.1:9090->9090/tcp
+recovery-webhook   self-healing-recovery-webhook           "python app.py"          recovery-webhook   23 hours ago   Up 8 hours          5000/tcp
+nginx_up=1 rule=inactive prometheus_alerts=0 alertmanager_alerts=0
+
+=== PHASE 2: CONTROLLED FAILURE ===
+nginx_running=false health=down
+
+=== PHASE 3: DETECTION AND AUTOMATED RECOVERY ===
+t=  0s nginx_up=1 alert=inactive running=false health=down
+t= 10s nginx_up=0 alert=pending  running=false health=down
+t= 20s nginx_up=0 alert=pending  running=false health=down
+t= 30s nginx_up=0 alert=pending  running=false health=down
+t= 40s nginx_up=0 alert=pending  running=false health=down
+t= 50s nginx_up=0 alert=pending  running=false health=down
+t= 60s nginx_up=0 alert=pending  running=false health=down
+t= 70s nginx_up=0 alert=pending  running=false health=down
+t= 80s nginx_up=0 alert=pending  running=false health=down
+t= 90s nginx_up=0 alert=pending  running=false health=down
+t=100s nginx_up=0 alert=pending  running=false health=down
+t=110s nginx_up=0 alert=firing   running=false health=down
+t=120s nginx_up=0 alert=firing   running=true health=ok
+
+=== PHASE 4: DEEP VALIDATION AND ALERT RESOLUTION ===
+resolution_t=  0s nginx_up=0 alert=firing   prometheus_alerts=1 alertmanager_alerts=1 health=ok
+resolution_t= 10s nginx_up=1 alert=firing   prometheus_alerts=1 alertmanager_alerts=1 health=ok
+resolution_t= 20s nginx_up=1 alert=inactive prometheus_alerts=0 alertmanager_alerts=0 health=ok
+2026-09-20 17:51:01,254 [INFO] alert received: status=firing alerts=['NginxDown']
+2026-09-20 17:51:01,254 [INFO] running recovery: ansible-playbook -i /ansible/inventory.ini /ansible/restart_nginx.yml
+2026-09-20 17:51:08,744 [INFO] recovery succeeded and passed validation
+2026-09-20 17:51:31,234 [INFO] alert received: status=resolved alerts=['NginxDown']
+2026-09-20 17:51:31,234 [INFO] alert resolved G�� no recovery needed
+
+=== RESULT: PASS ===
+Observed nginx_up 1->0->1, alert inactive->pending->firing->inactive, authenticated Ansible recovery, HTTP health, and resolved notification.
+
+=== CLEANUP ===
+restored_restart_policy=no
+cleanup_health=ok
+evidence_file=C:\Users\ASUS\self-healing\journal\evidence\day6-20260920T174834Z.log

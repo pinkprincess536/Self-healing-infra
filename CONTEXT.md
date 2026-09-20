@@ -175,15 +175,49 @@ The user applied the same ownership/mode correction on EC2 and reported successf
 - `/tmp` and `/opt` are Linux paths.
 - Dynamic operator IP changes require a new restricted Terraform CIDR plan; never use `0.0.0.0/0`.
 
+## Day 6 integration status
+
+Day 6 is isolated on `feature/day6-integration-demo`. Skipped Day 5.3 CI files are preserved in `stash@{0}` and are not mixed into this branch.
+
+Two repeatable, fail-safe scripts were added:
+
+- `scripts/run-recovery-demo.ps1` for Windows/local Docker Desktop.
+- `scripts/run-recovery-demo.sh` for Linux/EC2.
+
+Successful local evidence is saved at:
+
+```text
+journal/evidence/day6-20260920T174834Z.log
+```
+
+Verified timeline:
+
+```text
+baseline: nginx_up=1, alert=inactive, alert counts=0
+failure: NGINX stopped and health=down
+10s: nginx_up=0, alert=pending
+110s: alert=firing
+120s: Ansible recovery made NGINX healthy
+20s later: nginx_up=1, alert=inactive, alert counts=0
+webhook: firing received → Ansible ran → recovery verified → resolved received
+```
+
+The first two script attempts exposed Windows orchestration issues rather than system failures: expected curl failure was treated as terminating stderr, then successful `docker logs` output was treated as stderr. Both were corrected. Cleanup proved it could recover from script failure. Both scripts now always restore `restart: unless-stopped`, manually start NGINX if needed, and save evidence.
+
+Final local state after the demo:
+
+```text
+NGINX running
+/health = ok
+restart policy = unless-stopped
+Prometheus active alerts = 0
+```
+
 ## Current remaining work
 
-1. Commit and push the permanent token-permission fix and polished Day 5 journal.
-2. Confirm on EC2:
-   - token is `root:65534 640`;
-   - NGINX is healthy;
-   - NGINX restart policy is restored to `unless-stopped`;
-   - active Prometheus alerts are empty;
-   - recovery webhook logs show firing → recovery → resolved, if logs remain.
-3. Optionally reboot or replace EC2 to prove reproducibility.
-4. Destroy AWS resources after evidence is saved to stop charges.
-5. Begin Day 6 CI/CD and controlled resource-failure work.
+1. Validate final Day 6 scripts and documentation, then commit/push only when requested.
+2. Optionally run the Linux script on EC2 for a second formal cloud demo.
+3. Complete or formally postpone the stashed Day 5.3 CI/CD workflow.
+4. Add production hardening: Gunicorn, Compose healthchecks, resource limits, log rotation and stronger recovery isolation.
+5. Finish the main README, architecture diagram, incident runbook and final presentation.
+6. Destroy AWS resources after evidence is saved to stop charges.
