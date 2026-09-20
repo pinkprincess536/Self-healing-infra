@@ -12,7 +12,8 @@ NGINX failure
   → nginx_up returns to 1 and the alert resolves
 ```
 
-![Uploading self_healing_architecture_expanded.png…]()
+<img width="4000" height="2400" alt="self_healing_architecture_expanded" src="https://github.com/user-attachments/assets/bdb66fcf-48f1-471f-b49f-3f83213bf6b6" />
+
 
 
 > **Restart is an action. Recovery is a verified outcome.**
@@ -120,13 +121,6 @@ See [`infrastructure/terraform/README.md`](infrastructure/terraform/README.md) f
 
 Terraform creates a locked-down lab: a dedicated VPC, no inbound SSH (SSM only), monitoring ports bound to loopback, an EC2 IAM role limited to `AmazonSSMManagedInstanceCore`, IMDSv2 required, and an encrypted gp3 root volume.
 
-## Security model
-
-- The webhook token is generated locally, mounted from a gitignored file, and never committed.
-- `/recover` requires a Bearer token, a `firing` status, and the `NginxDown` alert name.
-- Alertmanager's `repeat_interval`, webhook cooldown, attempt window, and timeout prevent restart loops.
-- Monitoring ports bind to loopback and are reached via SSM port forwarding.
-- The Docker socket mount is a **deliberate lab limitation** — it gives the webhook root-level host control and is not a production security boundary.
 
 ## Recovery scope
 
