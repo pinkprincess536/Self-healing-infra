@@ -1,0 +1,19 @@
+# Secrets — never commit these.
+.env
+*.pem
+secrets/*
+!secrets/.gitkeep
+!secrets/*.example
+
+# Terraform (Day 5)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+
+# Python
+__pycache__/
+*.pyc
+
+# Saved Terraform plans may contain sensitive values
+*.tfplan

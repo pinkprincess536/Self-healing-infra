@@ -1,0 +1,180 @@
+---
+- name: Configure the self-healing EC2 host
+  hosts: self_healing_hosts
+  become: true
+  gather_facts: true
+
+  vars_prompt:
+    - name: webhook_token
+      prompt: "Enter the webhook token (input is hidden; it is never stored in Terraform)"
+      private: true
+      confirm: true
+
+  vars:
+    deploy_root: /opt/self-healing
+    deploy_user: ubuntu
+    required_packages:
+      - docker.io
+      - docker-compose-v2
+      - git
+
+  pre_tasks:
+    - name: Require Ubuntu/Debian host
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.os_family == "Debian"
+        fail_msg: "This lab playbook supports the selected Ubuntu AMI only."
+
+    - name: Require a non-placeholder webhook token
+      ansible.builtin.assert:
+        that:
+          - webhook_token is defined
+          - webhook_token | length >= 32
+          - webhook_token != "replace-me-with-a-long-random-token"
+        fail_msg: "Provide a random webhook token containing at least 32 characters."
+      no_log: true
+
+    - name: Require the repository checkout created by bootstrap
+      ansible.builtin.stat:
+        path: "{{ deploy_root }}/docker-compose.yml"
+      register: compose_file
+
+    - name: Stop when the repository is missing
+      ansible.builtin.assert:
+        that:
+          - compose_file.stat.exists
+        fail_msg: "{{ deploy_root }} is missing. Run bootstrap-ec2.sh first."
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install Docker, Compose v2, and Git
+      ansible.builtin.apt:
+        name: "{{ required_packages }}"
+        state: present
+
+    - name: Enable and start Docker
+      ansible.builtin.service:
+        name: docker
+        enabled: true
+        state: started
+
+    - name: Create the secret directory with restricted permissions
+      ansible.builtin.file:
+        path: "{{ deploy_root }}/secrets"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Install the webhook token without logging its value
+      ansible.builtin.copy:
+        content: "{{ webhook_token }}\n"
+        dest: "{{ deploy_root }}/secrets/webhook_token"
+        owner: root
+        # Alertmanager is pinned to UID/GID 65534 in Compose. Group-read lets
+        # that non-root process read the shared token without making it public.
+        group: "65534"
+        mode: "0640"
+      no_log: true
+      notify: Restart self-healing stack
+
+    - name: Install the systemd unit for the Compose stack
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/self-healing.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Self-Healing Infrastructure Compose Stack
+          Requires=docker.service
+          After=docker.service network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          WorkingDirectory={{ deploy_root }}
+          ExecStartPre=/usr/bin/test -s {{ deploy_root }}/secrets/webhook_token
+          ExecStart=/usr/bin/docker compose up -d --build
+          ExecReload=/usr/bin/docker compose up -d --build
+          ExecStop=/usr/bin/docker compose down
+          TimeoutStartSec=600
+          TimeoutStopSec=120
+
+          [Install]
+          WantedBy=multi-user.target
+      notify:
+        - Reload systemd
+        - Restart self-healing stack
+
+    - name: Apply handlers before verification
+      ansible.builtin.meta: flush_handlers
+
+    - name: Enable and start the self-healing stack
+      ansible.builtin.systemd_service:
+        name: self-healing.service
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Wait for NGINX application health
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8083/health
+        status_code: 200
+        return_content: true
+      register: nginx_health
+      retries: 12
+      delay: 5
+      until:
+        - nginx_health.status is defined
+        - nginx_health.status == 200
+        - "'ok' in nginx_health.content"
+
+    - name: Wait for Prometheus readiness
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9090/-/ready
+        status_code: 200
+      register: prometheus_ready
+      retries: 12
+      delay: 5
+      until: prometheus_ready.status is defined and prometheus_ready.status == 200
+
+    - name: Wait for Alertmanager readiness
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9093/-/ready
+        status_code: 200
+      register: alertmanager_ready
+      retries: 12
+      delay: 5
+      until: alertmanager_ready.status is defined and alertmanager_ready.status == 200
+
+    - name: Verify the internal recovery webhook through Compose DNS
+      ansible.builtin.command:
+        cmd: docker compose exec -T tester curl -fsS http://recovery-webhook:5000/healthz
+        chdir: "{{ deploy_root }}"
+      register: webhook_health
+      changed_when: false
+
+    - name: Report verified host configuration
+      ansible.builtin.debug:
+        msg: >-
+          EC2 configuration verified: Docker is active, the Compose stack is
+          systemd-managed, NGINX is healthy, Prometheus and Alertmanager are
+          ready, and the internal recovery webhook responds.
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Restart self-healing stack
+      ansible.builtin.systemd_service:
+        name: self-healing.service
+        state: restarted
+        enabled: true
+        daemon_reload: true

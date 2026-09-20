@@ -1,0 +1,15 @@
+# Copy to terraform.tfvars (which is gitignored) and replace this documentation
+# address with YOUR current public IPv4 address followed by /32.
+admin_cidr = "203.0.113.10/32"
+
+aws_region    = "us-east-1"
+instance_type = "t3.small"
+
+# SSM is the safer default. If you explicitly enable SSH, provide only the
+# PUBLIC key text; never put a private key in Terraform or this repository.
+enable_ssh = false
+# ssh_public_key = "ssh-ed25519 AAAA... operator@example"
+
+additional_tags = {
+  Owner = "replace-me"
+}

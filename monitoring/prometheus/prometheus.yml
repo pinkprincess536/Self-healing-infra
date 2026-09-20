@@ -1,0 +1,28 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alert_rules.yml"
+
+# Day 4: firing alerts are now pushed to Alertmanager, which owns routing.
+# Note the key is `alertmanagers` (plural) — using `alertmanager` here on Day 3
+# made Prometheus refuse to start with "field alertmanager not found".
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  # Prometheus scraping itself — useful baseline target to confirm the
+  # server is alive independent of anything else in the stack.
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # nginx-prometheus-exporter re-exposes NGINX's stub_status page in
+  # Prometheus format. Service name "nginx-exporter" resolves via Compose's
+  # internal DNS — same mechanism proven with the "tester" container on Day 2.
+  - job_name: "nginx"
+    static_configs:
+      - targets: ["nginx-exporter:9113"]

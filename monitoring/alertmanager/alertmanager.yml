@@ -1,0 +1,42 @@
+global:
+  resolve_timeout: 2m
+
+# Routing tree: every alert enters at the root route and walks down to the
+# first matching child. Anything that doesn't match a child stays on the root.
+route:
+  receiver: "null-receiver"
+  group_by: ["alertname"]
+  # group_wait: how long to buffer before sending the first notification for a
+  # new group — lets related alerts arrive together instead of firing N webhooks.
+  group_wait: 10s
+  # group_interval: minimum gap before sending an updated notification for a
+  # group that already notified.
+  group_interval: 30s
+  # repeat_interval: if the alert is STILL firing, how long before re-notifying.
+  # This is one of the restart-loop guards: Alertmanager won't hammer the
+  # recovery webhook every scrape, it re-sends at most this often.
+  repeat_interval: 5m
+
+  routes:
+    # Only NginxDown triggers automated recovery. NginxExporterDown is
+    # deliberately NOT routed here — if the exporter is down we've lost
+    # visibility into NGINX, and restarting NGINX blindly would be guessing.
+    - matchers:
+        - alertname = "NginxDown"
+      receiver: "recovery-webhook"
+
+receivers:
+  - name: "null-receiver"
+
+  - name: "recovery-webhook"
+    webhook_configs:
+      - url: "http://recovery-webhook:5000/recover"
+        # send_resolved lets the webhook log recovery confirmation too, so the
+        # full fire -> resolve lifecycle is visible in one place.
+        send_resolved: true
+        http_config:
+          authorization:
+            type: Bearer
+            # Token is read from a mounted file, never inlined here — this file
+            # is committed to git, the token file is gitignored.
+            credentials_file: /etc/alertmanager/webhook_token
