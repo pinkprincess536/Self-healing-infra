@@ -1,6 +1,6 @@
 # Self-Healing Infrastructure
 
-A learning project that builds the classic detection → recovery loop from scratch: when NGINX goes down, the system notices, restarts it, and — critically — proves it is healthy again, without a human touching anything.
+A learning project that builds the classic detection → recovery loop from scratch: when NGINX goes down, the system notices, restarts it, and,critically — proves it is healthy again, without a human touching anything.
 
 ```text
 NGINX failure
