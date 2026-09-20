@@ -12,6 +12,9 @@ NGINX failure
   → nginx_up returns to 1 and the alert resolves
 ```
 
+![Uploading self_healing_architecture_expanded.png…]()
+
+
 > **Restart is an action. Recovery is a verified outcome.**
 
 ## Stack
