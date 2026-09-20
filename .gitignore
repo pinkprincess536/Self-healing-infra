@@ -14,3 +14,6 @@ secrets/*
 # Python
 __pycache__/
 *.pyc
+
+# Saved Terraform plans may contain sensitive values
+*.tfplan

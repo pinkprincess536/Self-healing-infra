@@ -170,6 +170,21 @@ def recover():
         log.info("alert resolved — no recovery needed")
         return jsonify(status="ignored", reason="alert resolved"), 200
 
+    # Do not trust the caller merely because it has the token. Alertmanager's
+    # route is the first allow-list, and the action endpoint independently
+    # enforces both the event state and the exact recoverable alert name.
+    if payload.get("status") != "firing":
+        log.warning("rejected payload with non-firing status")
+        return jsonify(status="rejected", reason="status must be firing"), 400
+
+    alert_names = {
+        alert.get("labels", {}).get("alertname")
+        for alert in payload.get("alerts", [])
+    }
+    if "NginxDown" not in alert_names:
+        log.warning("rejected non-recoverable alerts: %s", sorted(str(name) for name in alert_names))
+        return jsonify(status="rejected", reason="NginxDown alert required"), 400
+
     now = time.time()
     with _lock:
         allowed, reason = _guard_check(now)

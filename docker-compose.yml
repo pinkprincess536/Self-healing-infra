@@ -4,37 +4,33 @@ services:
       context: ./app
     container_name: nginx
     ports:
-      # host:container — 8083 on the host maps to NGINX's port 80 in the container.
+      # The application is the only service intended for direct remote access.
+      # On EC2, its security-group rule is restricted to the operator's CIDR.
       - "8083:80"
     volumes:
-      # Bind mount: host file overrides the copy baked into the image at build
-      # time. Editing app/nginx.conf on the host and reloading NGINX takes
-      # effect immediately — no rebuild needed. (:ro = read-only inside container)
       - ./app/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped
 
   tester:
-    # Minimal image with curl, used only to prove container-to-container
-    # communication over the Compose network using the service name "nginx"
-    # instead of localhost/host ports.
+    # Diagnostic-only container for proving internal Compose DNS/networking.
     image: curlimages/curl:8.10.1
     container_name: tester
     entrypoint: ["sleep", "infinity"]
     depends_on:
       - nginx
+    restart: unless-stopped
 
   nginx-exporter:
-    # Scrapes NGINX's /stub_status endpoint and re-exposes it in Prometheus
-    # text format on :9113. NGINX itself doesn't speak Prometheus's format,
-    # so this exporter is the translation layer Prometheus actually scrapes.
     image: nginx/nginx-prometheus-exporter:1.3.0
     container_name: nginx-exporter
     command:
       - "--nginx.scrape-uri=http://nginx/stub_status"
     ports:
-      - "9113:9113"
+      # Loopback-only: available for host diagnostics, never directly public.
+      - "127.0.0.1:9113:9113"
     depends_on:
       - nginx
+    restart: unless-stopped
 
   prometheus:
     image: prom/prometheus:v2.55.1
@@ -43,28 +39,26 @@ services:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
     ports:
-      # Prometheus UI/API — /targets, /graph, /alerts all live here.
-      - "9090:9090"
+      # Loopback-only on EC2; use the Terraform output's SSM tunnel command.
+      - "127.0.0.1:9090:9090"
     depends_on:
       - nginx-exporter
+    restart: unless-stopped
 
   alertmanager:
-    # Owns routing/grouping/deduplication of firing alerts. Prometheus decides
-    # WHAT is wrong; Alertmanager decides WHO (or what) gets told about it.
     image: prom/alertmanager:v0.27.0
     container_name: alertmanager
     volumes:
       - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      # Shared secret, read via `credentials_file` — same file the webhook reads.
       - ./secrets/webhook_token:/etc/alertmanager/webhook_token:ro
     ports:
-      - "9093:9093"
+      # Loopback-only on EC2; use the Terraform output's SSM tunnel command.
+      - "127.0.0.1:9093:9093"
     depends_on:
       - recovery-webhook
+    restart: unless-stopped
 
   recovery-webhook:
-    # Receives the firing alert from Alertmanager and runs the Ansible recovery
-    # playbook. Requires a Bearer token; refuses to start without one.
     build:
       context: ./recovery/webhook
     container_name: recovery-webhook
@@ -76,14 +70,11 @@ services:
     volumes:
       - ./recovery/ansible:/ansible:ro
       - ./secrets/webhook_token:/run/secrets/webhook_token:ro
-      # SECURITY: mounting the Docker socket gives this container control over
-      # the Docker daemon, which is effectively root on the host. It's here
-      # because recovery must restart a sibling container. In the Day 5 EC2
-      # setup this is replaced by Ansible reaching the host over SSH/SSM.
+      # LAB-ONLY RISK: Docker socket access is effectively root-level control
+      # of this host. Keep /recover internal and destroy the EC2 lab after use.
       - /var/run/docker.sock:/var/run/docker.sock
-    # Port deliberately NOT published to the host — only reachable from
-    # Alertmanager on the internal Compose network.
     expose:
       - "5000"
     depends_on:
       - nginx
+    restart: unless-stopped

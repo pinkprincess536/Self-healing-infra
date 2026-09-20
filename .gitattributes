@@ -1,0 +1,7 @@
+# Linux EC2 executes shell scripts directly; force LF even when the repository
+# is edited from Windows so /usr/bin/env bash is parsed correctly.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.tf text eol=lf
+*.tftest.hcl text eol=lf
